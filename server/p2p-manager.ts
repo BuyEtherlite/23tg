@@ -233,21 +233,25 @@ export class P2PManager extends EventEmitter {
       // Create AI model pool in database
       const pool = await storage.createAiModelPool(poolData);
 
-    // Load source model data and create initial torrent
-    const sourceModelData = await this.loadSourceModelData(modelPath, sourceModel);
-    const torrent = await this.createModelPool(poolData, walletAddress);
+      // Load source model data and create initial torrent
+      const sourceModelData = await this.loadSourceModelData(modelPath, sourceModel);
+      const torrent = await this.createModelPool(poolData, walletAddress);
 
-    // Set initial model data with source model
-    await this.updateModel(poolId, {
-      sourceModel: sourceModel,
-      initialWeights: sourceModelData.weights,
-      architecture: sourceModelData.architecture,
-      tokenizer: sourceModelData.tokenizer,
-      trainingConfig: trainingConfig,
-      version: 1
-    }, 1);
+      // Set initial model data with source model
+      await this.updateModel(poolId, {
+        sourceModel: sourceModel,
+        initialWeights: sourceModelData.weights,
+        architecture: sourceModelData.architecture,
+        tokenizer: sourceModelData.tokenizer,
+        trainingConfig: trainingConfig,
+        version: 1
+      }, 1);
 
-    return { pool, torrent };
+      return { pool, torrent };
+    } catch (error) {
+      console.error('Error creating training pool from open source:', error);
+      throw error;
+    }
   }
 
   // Load source model data from file system

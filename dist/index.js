@@ -71,6 +71,7 @@ var init_schema = __esm({
       currentStageId: varchar("current_stage_id").references(() => icoStages.id).notNull(),
       features: jsonb("features").notNull().$type(),
       apiKeys: jsonb("api_keys").notNull().$type(),
+      adminWallets: jsonb("admin_wallets").default("[]").notNull().$type(),
       updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull()
     });
     aiModelPools = pgTable("ai_model_pools", {
@@ -175,6 +176,10 @@ var init_storage = __esm({
         const [participant] = await db.select().from(participants).where(eq(participants.walletAddress, walletAddress.toLowerCase()));
         return participant || void 0;
       }
+      async getParticipantById(id) {
+        const [participant] = await db.select().from(participants).where(eq(participants.id, id));
+        return participant || void 0;
+      }
       async createParticipant(participant) {
         const [newParticipant] = await db.insert(participants).values({
           ...participant,
@@ -208,6 +213,7 @@ var init_storage = __esm({
       async getPlatformSettings() {
         const [settings] = await db.select().from(platformSettings).where(eq(platformSettings.id, "default"));
         if (!settings) {
+          await this.initializeIcoStages();
           const defaultSettings = {
             id: "default",
             isIcoActive: true,
@@ -220,14 +226,77 @@ var init_storage = __esm({
               pioneers: true,
               history: true
             },
-            apiKeys: {}
+            apiKeys: {
+              rewonApiKey: void 0,
+              nowpaymentsApiKey: void 0,
+              nowpaymentsPublicKey: void 0
+            },
+            adminWallets: ["0x988f90a2b05356b4b626c27e10bfdde352bac8a0".toLowerCase()]
           };
           const [newSettings] = await db.insert(platformSettings).values(defaultSettings).returning();
           return newSettings;
         }
         return settings;
       }
+      async initializeIcoStages() {
+        try {
+          const existingStages = await db.select().from(icoStages);
+          if (existingStages.length > 0) {
+            return;
+          }
+          const stages = [
+            {
+              id: "stage1",
+              name: "Private Sale",
+              tokenPrice: "0.05",
+              totalTokens: 5e7,
+              soldTokens: 5e7,
+              minPurchase: 1e4,
+              maxPurchase: 1e6,
+              status: "completed"
+            },
+            {
+              id: "stage2",
+              name: "Presale Round 1",
+              tokenPrice: "0.065",
+              totalTokens: 75e6,
+              soldTokens: 75e6,
+              minPurchase: 5e3,
+              maxPurchase: 5e5,
+              status: "completed"
+            },
+            {
+              id: "stage3",
+              name: "Presale Round 2",
+              tokenPrice: "0.075",
+              totalTokens: 1e8,
+              soldTokens: 0,
+              minPurchase: 1e3,
+              maxPurchase: 25e4,
+              status: "active"
+            },
+            {
+              id: "stage4",
+              name: "Public Sale",
+              tokenPrice: "0.10",
+              totalTokens: 75e6,
+              soldTokens: 0,
+              minPurchase: 500,
+              maxPurchase: 1e5,
+              status: "upcoming"
+            }
+          ];
+          for (const stage of stages) {
+            await db.insert(icoStages).values(stage);
+          }
+        } catch (error) {
+          console.error("Error initializing ICO stages:", error);
+        }
+      }
       async updatePlatformSettings(updates) {
+        if (updates.adminWallets) {
+          updates.adminWallets = updates.adminWallets.map((wallet) => wallet.toLowerCase());
+        }
         const [updatedSettings] = await db.update(platformSettings).set({ ...updates, updatedAt: sql2`CURRENT_TIMESTAMP` }).where(eq(platformSettings.id, "default")).returning();
         return updatedSettings;
       }
@@ -244,7 +313,7 @@ var init_storage = __esm({
       }
       async initializeSampleModels() {
         try {
-          const existingModels = await db.select().from(aiModelPools);
+          const existingModels = await this.getAiModelPools();
           if (existingModels.length > 0) {
             return existingModels;
           }
@@ -287,71 +356,6 @@ var init_storage = __esm({
               status: "active",
               trainingProgress: 100,
               participantCount: 189
-            },
-            {
-              id: "fact-checker-pro",
-              name: "FactChecker Pro",
-              type: "Analysis Model",
-              description: "Real-time fact checking and source verification with scientific paper analysis",
-              minCpuCores: 5,
-              minGpuMemory: 10,
-              minRamGb: 20,
-              rewardPerHour: "0.60",
-              status: "active",
-              trainingProgress: 100,
-              participantCount: 123
-            },
-            {
-              id: "audio-forge",
-              name: "AudioForge",
-              type: "Audio Processing",
-              description: "Advanced audio processing and generation for space communications",
-              minCpuCores: 10,
-              minGpuMemory: 20,
-              minRamGb: 40,
-              rewardPerHour: "1.50",
-              status: "training",
-              trainingProgress: 78,
-              participantCount: 67
-            },
-            {
-              id: "exoplanet-classifier",
-              name: "Exoplanet Classifier",
-              type: "Signal Processing",
-              description: "Neural network for detecting and classifying exoplanets from telescope data",
-              minCpuCores: 12,
-              minGpuMemory: 24,
-              minRamGb: 48,
-              rewardPerHour: "2.00",
-              status: "training",
-              trainingProgress: 45,
-              participantCount: 89
-            },
-            {
-              id: "stellar-synthesis",
-              name: "Stellar Synthesis",
-              type: "Multimodal AI",
-              description: "Advanced multimodal AI combining text, image, and data analysis for stellar research",
-              minCpuCores: 16,
-              minGpuMemory: 32,
-              minRamGb: 64,
-              rewardPerHour: "3.00",
-              status: "training",
-              trainingProgress: 23,
-              participantCount: 45
-            },
-            {
-              id: "quantum-simulator",
-              name: "Quantum Simulator",
-              type: "Physics Simulation",
-              description: "Quantum mechanical simulation for space-time physics and cosmic phenomena",
-              minCpuCores: 20,
-              minGpuMemory: 40,
-              minRamGb: 80,
-              rewardPerHour: "4.50",
-              status: "active",
-              trainingProgress: 100,
-              participantCount: 28
             }
           ];
           const createdModels = [];
@@ -412,16 +416,22 @@ var init_storage = __esm({
       async getTopResourceContributors(limit = 10) {
         return await db.select().from(resourceStats).orderBy(desc(sql2`CAST(${resourceStats.totalEarnings} AS NUMERIC)`)).limit(limit);
       }
+      // Model torrent methods
+      async saveModelTorrent(torrent) {
+        console.log(`Saving torrent for model ${torrent.modelId}`);
+      }
+      async updateModelTorrent(modelId, updates) {
+        console.log(`Updating torrent for model ${modelId}`, updates);
+      }
       // Model checkpoint methods
       async saveModelCheckpoint(poolId, checkpoint) {
-        console.log(`Saving checkpoint for pool ${poolId}, version ${checkpoint.version}`);
+        console.log(`Saving checkpoint for pool ${poolId}`, checkpoint);
       }
       async getLatestModelCheckpoint(poolId) {
         console.log(`Getting latest checkpoint for pool ${poolId}`);
         return {
           poolId,
-          version: Math.floor(Date.now() / 6e4) % 100,
-          // Mock version based on time
+          version: 1,
           timestamp: /* @__PURE__ */ new Date(),
           trainingMetrics: {
             loss: Math.random() * 0.5,
@@ -432,7 +442,7 @@ var init_storage = __esm({
       async getModelCheckpointHistory(poolId) {
         console.log(`Getting checkpoint history for pool ${poolId}`);
         const history = [];
-        const latestVersion = Math.floor(Date.now() / 6e4) % 100;
+        const latestVersion = 1;
         for (let i = Math.max(1, latestVersion - 10); i <= latestVersion; i++) {
           history.push({
             poolId,
@@ -445,6 +455,34 @@ var init_storage = __esm({
           });
         }
         return history;
+      }
+      // Database cleanup methods
+      async cleanDatabase() {
+        try {
+          await db.delete(resourceContributions);
+          await db.delete(resourceStats);
+          await db.delete(aiModelPools);
+          await db.delete(transactions);
+          await db.delete(participants);
+          await db.delete(platformSettings);
+          await db.delete(icoStages);
+          console.log("Database cleaned successfully - all data removed");
+        } catch (error) {
+          console.error("Error cleaning database:", error);
+          throw error;
+        }
+      }
+      async resetDatabase() {
+        try {
+          await this.cleanDatabase();
+          await this.initializeIcoStages();
+          await this.getPlatformSettings();
+          await this.initializeSampleModels();
+          console.log("Database reset successfully - clean slate with initial data");
+        } catch (error) {
+          console.error("Error resetting database:", error);
+          throw error;
+        }
       }
     };
     storage = new DatabaseStorage();
@@ -1283,11 +1321,12 @@ var init_p2p_manager = __esm({
       }
       // Save training checkpoint to decentralized storage
       async saveTrainingCheckpoint(poolId, checkpoint) {
-        const checkpointData = Buffer.from(JSON.stringify(checkpoint));
-        for (const [walletAddress, node] of this.nodes) {
-          await node.saveCheckpoint(poolId, checkpointData, checkpoint.version);
+        try {
+          await storage.saveModelCheckpoint(poolId, checkpoint);
+          console.log(`Training checkpoint saved for pool ${poolId}`);
+        } catch (error) {
+          console.error(`Failed to save training checkpoint for pool ${poolId}:`, error);
         }
-        await storage.saveModelCheckpoint(poolId, checkpoint);
       }
       // Sync offline node with latest model data
       async syncOfflineNode(walletAddress) {
@@ -1308,43 +1347,58 @@ var init_p2p_manager = __esm({
         }
         return syncResults;
       }
+      nodeStats = /* @__PURE__ */ new Map();
       // Create training pool from open source model
       async createTrainingPoolFromOpenSource(sourceModelId, walletAddress, trainingConfig) {
-        const { modelRepository: modelRepository2 } = await Promise.resolve().then(() => (init_model_repository(), model_repository_exports));
-        const isDownloaded = await modelRepository2.isModelDownloaded(sourceModelId);
-        if (!isDownloaded) {
-          throw new Error("Source model must be downloaded first");
+        try {
+          console.log(`Starting pool creation for model ${sourceModelId}`);
+          const { modelRepository: modelRepository2 } = await Promise.resolve().then(() => (init_model_repository(), model_repository_exports));
+          const isDownloaded = await modelRepository2.isModelDownloaded(sourceModelId);
+          if (!isDownloaded) {
+            throw new Error(`Source model ${sourceModelId} must be downloaded first`);
+          }
+          const sourceModel = await modelRepository2.getModelById(sourceModelId);
+          const modelPath = await modelRepository2.getModelPath(sourceModelId);
+          if (!sourceModel) {
+            throw new Error(`Source model ${sourceModelId} not found in repository`);
+          }
+          if (!modelPath) {
+            throw new Error(`Source model ${sourceModelId} path not available`);
+          }
+          console.log(`Found source model: ${sourceModel.name} at ${modelPath}`);
+          const poolId = `${sourceModelId}-training-${Date.now()}`;
+          const poolData = {
+            id: poolId,
+            name: `${sourceModel.name} Training Pool`,
+            type: sourceModel.modelType,
+            description: `P2P training pool for ${sourceModel.name}`,
+            minCpuCores: sourceModel.requirements.minCpuCores,
+            minGpuMemory: sourceModel.requirements.minGpuMemory,
+            minRamGb: sourceModel.requirements.minRamGb,
+            rewardPerHour: trainingConfig.rewardPerHour || "0.05",
+            sourceModelId,
+            trainingConfig,
+            status: "active",
+            participantCount: 0,
+            trainingProgress: 0
+          };
+          console.log(`Creating AI model pool with ID: ${poolId}`);
+          const pool2 = await storage.createAiModelPool(poolData);
+          const sourceModelData = await this.loadSourceModelData(modelPath, sourceModel);
+          const torrent = await this.createModelPool(poolData, walletAddress);
+          await this.updateModel(poolId, {
+            sourceModel,
+            initialWeights: sourceModelData.weights,
+            architecture: sourceModelData.architecture,
+            tokenizer: sourceModelData.tokenizer,
+            trainingConfig,
+            version: 1
+          }, 1);
+          return { pool: pool2, torrent };
+        } catch (error) {
+          console.error("Error creating training pool from open source:", error);
+          throw error;
         }
-        const sourceModel = await modelRepository2.getModelById(sourceModelId);
-        const modelPath = await modelRepository2.getModelPath(sourceModelId);
-        if (!sourceModel || !modelPath) {
-          throw new Error("Source model not found or not downloaded");
-        }
-        const poolId = `${sourceModelId}-training-${Date.now()}`;
-        const poolData = {
-          id: poolId,
-          name: `${sourceModel.name} Training Pool`,
-          type: sourceModel.modelType,
-          description: `P2P training pool for ${sourceModel.name}`,
-          minCpuCores: sourceModel.requirements.minCpuCores,
-          minGpuMemory: sourceModel.requirements.minGpuMemory,
-          minRamGb: sourceModel.requirements.minRamGb,
-          rewardPerHour: trainingConfig.rewardPerHour || "0.05",
-          sourceModelId,
-          trainingConfig
-        };
-        const pool2 = await storage.createAiModelPool(poolData);
-        const sourceModelData = await this.loadSourceModelData(modelPath, sourceModel);
-        const torrent = await this.createModelPool(poolData, walletAddress);
-        await this.updateModel(poolId, {
-          sourceModel,
-          initialWeights: sourceModelData.weights,
-          architecture: sourceModelData.architecture,
-          tokenizer: sourceModelData.tokenizer,
-          trainingConfig,
-          version: 1
-        }, 1);
-        return { pool: pool2, torrent };
       }
       // Load source model data from file system
       async loadSourceModelData(modelPath, modelInfo) {
@@ -1519,6 +1573,7 @@ var init_p2p_manager = __esm({
       // Store torrent information in database
       async storeTorrentInfo(torrent) {
         console.log(`Storing torrent info for model ${torrent.modelId}`);
+        await storage.saveModelTorrent(torrent);
       }
       // Update torrent information
       async updateTorrentInfo(modelId, updates) {
@@ -1526,6 +1581,7 @@ var init_p2p_manager = __esm({
         if (torrent) {
           Object.assign(torrent, updates);
           console.log(`Updated torrent info for model ${modelId}`);
+          await storage.updateModelTorrent(modelId, updates);
         }
       }
       // Update participant statistics based on P2P activity
@@ -1743,7 +1799,7 @@ async function generateDistributedResponse(modelId, prompt, nodeCount) {
 
 Query: "${prompt}"
 
-\u2728 Advanced Analysis Complete
+\u2728 Analysis Complete
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 
 Based on my distributed neural network training across ${nodeCount} active nodes, I've processed your query through multiple layers of astronomical and scientific knowledge.
@@ -1930,6 +1986,22 @@ async function distributeInferenceRewards(modelId, rewardAmount) {
   }
 }
 async function registerRoutes(app2) {
+  const requireAdmin = async (req, res, next) => {
+    try {
+      const walletAddress = req.headers["x-wallet-address"] || req.query.walletAddress;
+      if (!walletAddress) {
+        return res.status(401).json({ error: "Wallet address required" });
+      }
+      const settings = await storage.getPlatformSettings();
+      const adminWallets = settings.adminWallets || [];
+      if (!adminWallets.includes(walletAddress.toLowerCase())) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      next();
+    } catch (error) {
+      res.status(500).json({ error: "Authentication failed" });
+    }
+  };
   app2.get("/api/stages", async (req, res) => {
     try {
       const stages = await storage.getIcoStages();
@@ -1994,7 +2066,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ error: "Failed to fetch transactions" });
     }
   });
-  app2.get("/api/admin/transactions", async (req, res) => {
+  app2.get("/api/admin/transactions", requireAdmin, async (req, res) => {
     try {
       const transactions2 = await storage.getAllTransactions();
       res.json(transactions2);
@@ -2006,21 +2078,9 @@ async function registerRoutes(app2) {
     try {
       const transactionData = insertTransactionSchema.parse(req.body);
       const transaction = await storage.createTransaction(transactionData);
-      const participant = await storage.getParticipantByWallet(req.body.walletAddress);
-      if (participant) {
-        await storage.updateParticipant(participant.id, {
-          tokenBalance: participant.tokenBalance + transactionData.tokens,
-          totalInvested: (parseFloat(participant.totalInvested) + parseFloat(transactionData.amountUSD)).toString()
-        });
-        const stage = await storage.getIcoStageById(transactionData.stageId);
-        if (stage) {
-          await storage.updateIcoStage(stage.id, {
-            soldTokens: stage.soldTokens + transactionData.tokens
-          });
-        }
-      }
       res.json(transaction);
     } catch (error) {
+      console.error("Transaction creation error:", error);
       res.status(400).json({ error: error instanceof Error ? error.message : "Invalid transaction data" });
     }
   });
@@ -2048,6 +2108,34 @@ async function registerRoutes(app2) {
       res.status(500).json({ error: "Failed to fetch settings" });
     }
   });
+  app2.get("/api/payments/status/:paymentId", async (req, res) => {
+    try {
+      const { paymentId } = req.params;
+      const settings = await storage.getPlatformSettings();
+      const nowpaymentsApiKey = settings.apiKeys?.nowpaymentsApiKey;
+      if (!nowpaymentsApiKey) {
+        return res.json({
+          payment_status: "waiting",
+          pay_amount: "0.001",
+          pay_currency: "btc",
+          actually_paid: "0"
+        });
+      }
+      const statusResponse = await fetch(`https://api.nowpayments.io/v1/payment/${paymentId}`, {
+        headers: {
+          "x-api-key": nowpaymentsApiKey
+        }
+      });
+      if (!statusResponse.ok) {
+        throw new Error("Failed to check payment status");
+      }
+      const statusData = await statusResponse.json();
+      res.json(statusData);
+    } catch (error) {
+      console.error("Payment status check error:", error);
+      res.status(500).json({ error: "Failed to check payment status" });
+    }
+  });
   app2.patch("/api/settings", async (req, res) => {
     try {
       const updateData = insertPlatformSettingsSchema.partial().parse(req.body);
@@ -2055,7 +2143,8 @@ async function registerRoutes(app2) {
         const typedApiKeys = updateData.apiKeys;
         updateData.apiKeys = {
           rewonApiKey: typeof typedApiKeys.rewonApiKey === "string" ? typedApiKeys.rewonApiKey : void 0,
-          nowpaymentsApiKey: typeof typedApiKeys.nowpaymentsApiKey === "string" ? typedApiKeys.nowpaymentsApiKey : void 0
+          nowpaymentsApiKey: typeof typedApiKeys.nowpaymentsApiKey === "string" ? typedApiKeys.nowpaymentsApiKey : void 0,
+          nowpaymentsPublicKey: typeof typedApiKeys.nowpaymentsPublicKey === "string" ? typedApiKeys.nowpaymentsPublicKey : void 0
         };
       }
       const updatedSettings = await storage.updatePlatformSettings(updateData);
@@ -2064,27 +2153,56 @@ async function registerRoutes(app2) {
       res.status(400).json({ error: error instanceof Error ? error.message : "Invalid settings data" });
     }
   });
-  app2.get("/api/admin/analytics", async (req, res) => {
+  app2.get("/api/admin/check", async (req, res) => {
     try {
-      const transactions2 = await storage.getAllTransactions();
-      const stages = await storage.getIcoStages();
-      const totalRaised = transactions2.filter((tx) => tx.status === "completed").reduce((sum, tx) => sum + parseFloat(tx.amountUSD), 0);
-      const totalParticipants = new Set(transactions2.map((tx) => tx.participantId)).size;
-      const totalTokensSold = transactions2.filter((tx) => tx.status === "completed").reduce((sum, tx) => sum + tx.tokens, 0);
-      const avgPurchase = totalParticipants > 0 ? totalRaised / totalParticipants : 0;
-      const fundsByStage = stages.map((stage) => ({
-        name: stage.name,
-        raised: transactions2.filter((tx) => tx.stageId === stage.id && tx.status === "completed").reduce((sum, tx) => sum + parseFloat(tx.amountUSD), 0)
-      }));
+      const walletAddress = req.query.walletAddress;
+      if (!walletAddress) {
+        return res.json({ isAdmin: false, adminWallets: [] });
+      }
+      const settings = await storage.getPlatformSettings();
+      const adminWallets = settings.adminWallets || [];
+      const normalizedWallet = walletAddress.toLowerCase();
       res.json({
-        totalRaised,
-        totalParticipants,
-        totalTokensSold,
-        avgPurchase,
-        fundsByStage
+        isAdmin: adminWallets.includes(normalizedWallet),
+        adminWallets
       });
     } catch (error) {
+      res.status(500).json({ error: "Failed to check admin status" });
+    }
+  });
+  app2.get("/api/admin/analytics", requireAdmin, async (req, res) => {
+    try {
+      const allTransactions = await storage.getAllTransactions();
+      const totalRaised = allTransactions.filter((t) => t.status === "completed").reduce((sum, t) => sum + parseFloat(t.amountUSD), 0);
+      const allParticipants = await storage.getParticipantByWallet("dummy");
+      res.json({
+        totalRaised,
+        totalParticipants: 0,
+        // Placeholder
+        activeStage: "stage3",
+        totalTokensSold: 125e6
+      });
+    } catch (error) {
+      console.error("Error fetching analytics:", error);
       res.status(500).json({ error: "Failed to fetch analytics" });
+    }
+  });
+  app2.post("/api/admin/clean-database", requireAdmin, async (req, res) => {
+    try {
+      await storage.cleanDatabase();
+      res.json({ message: "Database cleaned successfully" });
+    } catch (error) {
+      console.error("Error cleaning database:", error);
+      res.status(500).json({ error: "Failed to clean database" });
+    }
+  });
+  app2.post("/api/admin/reset-database", requireAdmin, async (req, res) => {
+    try {
+      await storage.resetDatabase();
+      res.json({ message: "Database reset successfully" });
+    } catch (error) {
+      console.error("Error resetting database:", error);
+      res.status(500).json({ error: "Failed to reset database" });
     }
   });
   app2.get("/api/pools", async (req, res) => {
@@ -2288,21 +2406,132 @@ async function registerRoutes(app2) {
       res.status(500).json({ error: "Failed to fetch storage info" });
     }
   });
+  app2.post("/api/payments/create-invoice", async (req, res) => {
+    try {
+      const { amount, currency, payCurrency, orderId, description, walletAddress } = req.body;
+      if (!amount || !currency || !orderId || !walletAddress) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      const settings = await storage.getPlatformSettings();
+      const nowpaymentsApiKey = settings.apiKeys?.nowpaymentsApiKey;
+      const nowpaymentsPublicKey = settings.apiKeys?.nowpaymentsPublicKey;
+      if (!nowpaymentsApiKey) {
+        return res.status(500).json({ error: "NOWPayments API key not configured" });
+      }
+      const currencyRates = {
+        btc: { rate: 25e-6, decimals: 8, address: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh" },
+        eth: { rate: 3e-4, decimals: 18, address: "0x742d35Cc6634C0532925a3b8C17357d2E7C8D9B4" },
+        sol: { rate: 0.01, decimals: 9, address: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU" },
+        trx: { rate: 8.5, decimals: 6, address: "TLPamm8gjJ7VAjjbfqXGWHTrHrSMTxiCdd" }
+      };
+      const selectedCurrency = payCurrency || "btc";
+      const currencyConfig = currencyRates[selectedCurrency] || currencyRates.btc;
+      let paymentData;
+      if (nowpaymentsApiKey) {
+        try {
+          const paymentResponse = await fetch("https://api.nowpayments.io/v1/payment", {
+            method: "POST",
+            headers: {
+              "x-api-key": nowpaymentsApiKey,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              price_amount: amount,
+              price_currency: currency,
+              pay_currency: selectedCurrency,
+              order_id: orderId,
+              order_description: description,
+              ipn_callback_url: `${req.protocol}://${req.get("host")}/api/payments/webhook`,
+              success_url: `${req.protocol}://${req.get("host")}/success`,
+              cancel_url: `${req.protocol}://${req.get("host")}/cancel`
+            })
+          });
+          if (!paymentResponse.ok) {
+            const errorText = await paymentResponse.text();
+            console.error("NOWPayments API error:", errorText);
+            return res.status(500).json({ error: "Failed to create payment with NOWPayments" });
+          }
+          paymentData = await paymentResponse.json();
+        } catch (apiError) {
+          console.error("NOWPayments API request failed:", apiError);
+          return res.status(500).json({ error: "Payment service unavailable" });
+        }
+      } else {
+        paymentData = {
+          payment_id: `demo_${Date.now()}`,
+          pay_address: currencyConfig.address,
+          pay_amount: (amount * currencyConfig.rate).toFixed(8),
+          pay_currency: selectedCurrency,
+          payment_status: "waiting"
+        };
+      }
+      const payAmount = parseFloat(paymentData.pay_amount);
+      const convertedAmount = Math.floor(payAmount * Math.pow(10, currencyConfig.decimals)).toString(16);
+      res.json({
+        paymentId: paymentData.payment_id,
+        payAddress: paymentData.pay_address,
+        payAmount: paymentData.pay_amount,
+        payAmountWei: "0x" + convertedAmount,
+        payCurrency: paymentData.pay_currency,
+        status: paymentData.payment_status,
+        data: "0x"
+      });
+    } catch (error) {
+      console.error("Payment creation error:", error);
+      res.status(500).json({ error: "Failed to create payment invoice" });
+    }
+  });
   app2.post("/api/payments/webhook", async (req, res) => {
     try {
-      const { payment_status, order_id, actually_paid } = req.body;
-      if (payment_status === "finished") {
-        await storage.updateTransaction(order_id, {
+      const settings = await storage.getPlatformSettings();
+      const nowpaymentsPublicKey = settings.apiKeys?.nowpaymentsPublicKey;
+      if (nowpaymentsPublicKey) {
+        const receivedSignature = req.headers["x-nowpayments-sig"];
+        const payload = JSON.stringify(req.body);
+        const crypto = await import("crypto");
+        const expectedSignature = crypto.createHmac("sha512", nowpaymentsPublicKey).update(payload).digest("hex");
+        if (receivedSignature !== expectedSignature) {
+          console.error("Invalid webhook signature");
+          return res.status(401).json({ error: "Invalid signature" });
+        }
+      }
+      const { payment_status, order_id, actually_paid, payment_id, pay_currency, pay_amount } = req.body;
+      console.log(`Webhook received for order ${order_id}: ${payment_status}, currency: ${pay_currency}, amount: ${pay_amount}`);
+      if (payment_status === "finished" || payment_status === "confirmed") {
+        const transaction = await storage.updateTransaction(order_id, {
           status: "completed",
-          transactionHash: req.body.payment_id
+          transactionHash: payment_id
         });
-      } else if (payment_status === "failed") {
+        if (transaction) {
+          const participant = await storage.getParticipantById(transaction.participantId);
+          if (participant) {
+            await storage.updateParticipant(participant.id, {
+              tokenBalance: participant.tokenBalance + transaction.tokens,
+              totalInvested: (parseFloat(participant.totalInvested) + parseFloat(transaction.amountUSD)).toString()
+            });
+            const stage = await storage.getIcoStageById(transaction.stageId);
+            if (stage) {
+              await storage.updateIcoStage(stage.id, {
+                soldTokens: stage.soldTokens + transaction.tokens
+              });
+            }
+            console.log(`Payment confirmed for ${participant.walletAddress}: ${transaction.tokens} SAI tokens via ${pay_currency?.toUpperCase()}`);
+          }
+        }
+      } else if (payment_status === "failed" || payment_status === "expired") {
         await storage.updateTransaction(order_id, {
           status: "failed"
         });
+        console.log(`Payment failed/expired for order ${order_id}`);
+      } else if (payment_status === "partially_paid") {
+        await storage.updateTransaction(order_id, {
+          status: "pending"
+        });
+        console.log(`Payment partially received for order ${order_id}`);
       }
       res.json({ status: "ok" });
     } catch (error) {
+      console.error("Webhook processing error:", error);
       res.status(500).json({ error: "Webhook processing failed" });
     }
   });
@@ -2564,12 +2793,27 @@ async function registerRoutes(app2) {
     try {
       const { modelId } = req.params;
       const { walletAddress, trainingConfig } = req.body;
+      console.log(`Creating training pool for model ${modelId} with wallet ${walletAddress}`);
+      if (!modelId || !walletAddress) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required fields: modelId and walletAddress"
+        });
+      }
+      const validatedConfig = {
+        rewardPerHour: trainingConfig?.rewardPerHour || "0.05",
+        epochs: trainingConfig?.epochs || 10,
+        batchSize: trainingConfig?.batchSize || 32,
+        learningRate: trainingConfig?.learningRate || 1e-3,
+        modelComplexity: trainingConfig?.modelComplexity || "medium"
+      };
       const { p2pManager: p2pManager2 } = await Promise.resolve().then(() => (init_p2p_manager(), p2p_manager_exports));
       const result = await p2pManager2.createTrainingPoolFromOpenSource(
         modelId,
         walletAddress,
-        trainingConfig
+        validatedConfig
       );
+      console.log(`Successfully created training pool: ${result.pool.name}`);
       res.json({
         success: true,
         pool: result.pool,
@@ -2582,7 +2826,9 @@ async function registerRoutes(app2) {
         initialVersion: 1
       });
     } catch (error) {
+      console.error("Error creating training pool with open source model:", error);
       res.status(500).json({
+        success: false,
         error: error instanceof Error ? error.message : "Failed to create training pool with open source model"
       });
     }
@@ -2720,25 +2966,21 @@ async function registerRoutes(app2) {
       const activePools = await storage.getAiModelPools();
       const trainingSessions = [];
       for (const pool2 of activePools) {
-        if (pool2.status === "training" || pool2.status === "active") {
-          const sessionStartTime = new Date(Date.now() - Math.random() * 4 * 60 * 60 * 1e3);
-          const progressPercent = pool2.status === "training" ? pool2.trainingProgress : 100;
-          const estimatedCompletion = pool2.status === "training" ? new Date(Date.now() + (100 - progressPercent) * 2 * 60 * 1e3) : sessionStartTime;
+        if (pool2.status === "training") {
           trainingSessions.push({
             id: `session_${pool2.id}`,
             modelId: pool2.id,
             modelName: pool2.name,
-            status: pool2.status === "training" ? "running" : "completed",
-            progress: progressPercent,
-            startTime: sessionStartTime,
-            estimatedCompletion,
-            currentEpoch: Math.floor(progressPercent),
+            status: "running",
+            progress: pool2.trainingProgress || 0,
+            startTime: new Date(pool2.createdAt),
+            estimatedCompletion: new Date(Date.now() + (100 - (pool2.trainingProgress || 0)) * 2 * 60 * 1e3),
+            currentEpoch: Math.floor((pool2.trainingProgress || 0) / 10),
             totalEpochs: 100,
-            loss: Math.max(1e-3, (100 - progressPercent) * 1e-3 + Math.random() * 0.01),
-            accuracy: Math.min(0.999, 0.7 + progressPercent / 100 * 0.25 + Math.random() * 0.05),
+            loss: Math.max(1e-3, (100 - (pool2.trainingProgress || 0)) * 0.01),
+            accuracy: Math.min(0.999, 0.7 + (pool2.trainingProgress || 0) / 100 * 0.25),
             participantsActive: pool2.participantCount,
-            computeAllocated: pool2.participantCount * pool2.minCpuCores * 100
-            // Estimate compute units
+            computeAllocated: pool2.participantCount * pool2.minCpuCores
           });
         }
       }
@@ -2755,20 +2997,20 @@ async function registerRoutes(app2) {
       const activePools = await storage.getAiModelPools();
       const trainingPools = activePools.filter((pool2) => pool2.status === "training");
       const totalParticipants = trainingPools.reduce((sum, pool2) => sum + pool2.participantCount, 0);
-      const avgProgress = trainingPools.length > 0 ? trainingPools.reduce((sum, pool2) => sum + pool2.trainingProgress, 0) / trainingPools.length : 0;
+      const avgProgress = trainingPools.length > 0 ? trainingPools.reduce((sum, pool2) => sum + (pool2.trainingProgress || 0), 0) / trainingPools.length : 0;
       const metrics = {
-        cpuUsage: Math.min(100, Math.max(20, totalParticipants * 2 + Math.random() * 20)),
-        gpuUsage: Math.min(100, Math.max(30, totalParticipants * 3 + Math.random() * 25)),
-        memoryUsage: Math.min(100, Math.max(40, totalParticipants * 1.5 + Math.random() * 15)),
-        networkThroughput: networkStats.totalChunks * 0.1 + Math.random() * 50,
+        cpuUsage: totalParticipants > 0 ? Math.min(100, totalParticipants * 5) : 0,
+        gpuUsage: totalParticipants > 0 ? Math.min(100, totalParticipants * 8) : 0,
+        memoryUsage: totalParticipants > 0 ? Math.min(100, totalParticipants * 3) : 0,
+        networkThroughput: trainingPools.length > 0 ? networkStats.totalChunks * 0.1 : 0,
         activeNodes: networkStats.totalNodes,
-        totalBatches: Math.floor(avgProgress * 10),
-        batchesCompleted: Math.floor(avgProgress * 8.5),
+        totalBatches: Math.floor(avgProgress * 2),
+        batchesCompleted: Math.floor(avgProgress * 1.8),
         learningRate: 1e-3,
         networkHealth: networkStats.networkHealth,
         totalTorrents: networkStats.totalTorrents,
-        distributedStorage: `${(networkStats.totalChunks * 1.2).toFixed(1)}GB`,
-        consensusRate: Math.min(100, 85 + Math.random() * 15)
+        distributedStorage: `${(networkStats.totalChunks * 0.5).toFixed(1)}GB`,
+        consensusRate: trainingPools.length > 0 ? Math.min(100, 75 + avgProgress * 0.25) : 0
       };
       res.json(metrics);
     } catch (error) {

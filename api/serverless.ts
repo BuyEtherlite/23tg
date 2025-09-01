@@ -1,4 +1,4 @@
-import * as express from "express";
+import express, { Request, Response, NextFunction } from "express";
 
 // Create Express app
 const app = express();
@@ -8,7 +8,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // Basic logging middleware for serverless functions
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
   res.on("finish", () => {
     const duration = Date.now() - start;
@@ -18,7 +18,7 @@ app.use((req, res, next) => {
 });
 
 // CORS headers for API routes
-app.use((req, res, next) => {
+app.use((req: Request, res: Response, next: NextFunction) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
@@ -39,7 +39,7 @@ async function registerServerlessRoutes() {
   const { SystemMonitor } = await import("../server/system-monitor");
   
   // Admin authentication middleware
-  const requireAdmin = async (req: any, res: any, next: any) => {
+  const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const walletAddress = req.query.walletAddress as string;
       if (!walletAddress) {
@@ -60,7 +60,7 @@ async function registerServerlessRoutes() {
   };
 
   // Health check endpoint for Vercel deployment verification
-  app.get("/api/health", async (req, res) => {
+  app.get("/api/health", async (req: Request, res: Response) => {
     try {
       // Test database connection
       const stages = await storage.getIcoStages();
@@ -85,7 +85,7 @@ async function registerServerlessRoutes() {
   });
 
   // Get ICO stages
-  app.get("/api/stages", async (req, res) => {
+  app.get("/api/stages", async (req: Request, res: Response) => {
     try {
       const stages = await storage.getIcoStages();
       res.json(stages);
@@ -95,7 +95,7 @@ async function registerServerlessRoutes() {
   });
 
   // Get current ICO stage
-  app.get("/api/stages/current", async (req, res) => {
+  app.get("/api/stages/current", async (req: Request, res: Response) => {
     try {
       const settings = await storage.getPlatformSettings();
       if (!settings?.currentStageId) {
@@ -114,7 +114,7 @@ async function registerServerlessRoutes() {
   });
 
   // Get participant by wallet address
-  app.get("/api/participants/:walletAddress", async (req, res) => {
+  app.get("/api/participants/:walletAddress", async (req: Request, res: Response) => {
     try {
       const { walletAddress } = req.params;
       const participant = await storage.getParticipantByWallet(walletAddress);
@@ -128,7 +128,7 @@ async function registerServerlessRoutes() {
   });
 
   // Create participant
-  app.post("/api/participants", async (req, res) => {
+  app.post("/api/participants", async (req: Request, res: Response) => {
     try {
       const { walletAddress } = req.body;
       if (!walletAddress) {
@@ -148,7 +148,7 @@ async function registerServerlessRoutes() {
   });
 
   // Get transactions for participant
-  app.get("/api/transactions/:participantId", async (req, res) => {
+  app.get("/api/transactions/:participantId", async (req: Request, res: Response) => {
     try {
       const { participantId } = req.params;
       const transactions = await storage.getTransactionsByParticipant(participantId);
@@ -159,7 +159,7 @@ async function registerServerlessRoutes() {
   });
 
   // Settings
-  app.get("/api/settings", async (req, res) => {
+  app.get("/api/settings", async (req: Request, res: Response) => {
     try {
       const settings = await storage.getPlatformSettings();
       res.json(settings);
@@ -169,7 +169,7 @@ async function registerServerlessRoutes() {
   });
 
   // System Resources
-  app.get("/api/system/resources", async (req, res) => {
+  app.get("/api/system/resources", async (req: Request, res: Response) => {
     try {
       const resources = await SystemMonitor.getAllSystemResources();
       res.json(resources);
@@ -179,7 +179,7 @@ async function registerServerlessRoutes() {
   });
 
   // Admin check
-  app.get('/api/admin/check', async (req, res) => {
+  app.get('/api/admin/check', async (req: Request, res: Response) => {
     try {
       const walletAddress = req.query.walletAddress as string;
       if (!walletAddress) {
@@ -202,7 +202,24 @@ async function registerServerlessRoutes() {
   routesRegistered = true;
 }
 
-export default async function handler(req: any, res: any) {
-  await registerServerlessRoutes();
-  return app(req, res);
+export default async function handler(req: Request, res: Response) {
+  try {
+    await registerServerlessRoutes();
+    return app(req, res);
+  } catch (error) {
+    console.error('Serverless function error:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      url: req.url,
+      method: req.method,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Internal server error',
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
 }

@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { validateEnvironment, getConfig } from "./config";
 
 const app = express();
 app.use(express.json());
@@ -37,35 +38,50 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Validate environment configuration first
+  validateEnvironment();
+  const config = getConfig();
+
   const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    // Log error details for debugging but don't crash the server
+    console.error('Server error:', {
+      error: err.message,
+      stack: err.stack,
+      url: req.url,
+      method: req.method,
+      status,
+      timestamp: new Date().toISOString()
+    });
+
+    // Send error response but don't throw to prevent server crash
+    if (!res.headersSent) {
+      res.status(status).json({ 
+        message,
+        timestamp: new Date().toISOString(),
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+      });
+    }
   });
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  if (config.NODE_ENV === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
   server.listen({
-    port,
-    host: "0.0.0.0",
+    port: config.PORT,
+    host: config.HOST,
     reusePort: true,
   }, () => {
-    log(`serving on port ${port}`);
+    log(`serving on port ${config.PORT} in ${config.NODE_ENV} mode`);
   });
 })();

@@ -12,21 +12,62 @@ This guide covers deployment options for the Stellarium AI ICO Platform.
 ### Environment Variables
 Set the following environment variables in your Vercel dashboard:
 
-#### Required
-```
+#### Required Core Variables
+```bash
 NODE_ENV=production
-POSTGRES_URL=your_postgresql_connection_string
-SESSION_SECRET=your_secure_session_secret_min_32_chars
+POSTGRES_URL=postgresql://neondb_owner:npg_qwjCLe54MTdo@ep-ancient-hill-a2bnzhr1-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require
+SESSION_SECRET=your_secure_session_secret_minimum_64_characters
 ```
 
-#### Optional (for payment integrations)
+#### Stack Auth Configuration (Required for Authentication)
+```bash
+STACK_PROJECT_ID=42e0b860-0408-4849-ab73-95131a5e40bc
+STACK_PUBLISHABLE_CLIENT_KEY=pck_nrtv0jvcmtx2zba49hq54fg5wv0mc0memrrd2edc9re1r
+STACK_SECRET_SERVER_KEY=ssk_fjk86ns9p2yk0d2cmpzzsmhkx22jgx7by6fdamkk07x58
 ```
-STRIPE_SECRET_KEY=your_stripe_secret_key
-STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
+
+#### Additional Database URLs (Optional)
+```bash
+# Alternative database URL for compatibility
+DATABASE_URL=postgresql://neondb_owner:npg_qwjCLe54MTdo@ep-ancient-hill-a2bnzhr1.eu-central-1.aws.neon.tech/neondb?sslmode=require
+
+# Direct URL for Prisma migrations (unpooled)
+DIRECT_URL=postgresql://neondb_owner:npg_qwjCLe54MTdo@ep-ancient-hill-a2bnzhr1.eu-central-1.aws.neon.tech/neondb?sslmode=require
+```
+
+#### Payment Integrations (Optional)
+```bash
+STRIPE_SECRET_KEY=sk_live_your_stripe_secret_key
+STRIPE_PUBLISHABLE_KEY=pk_live_your_stripe_publishable_key
 REWON_API_KEY=your_rewon_api_key
 NOWPAYMENTS_API_KEY=your_nowpayments_api_key
 NOWPAYMENTS_PUBLIC_KEY=your_nowpayments_public_key
 ```
+
+#### Production Security Settings (Recommended)
+```bash
+PRODUCTION_MODE=true
+DEBUG=false
+LOG_LEVEL=info
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+```
+
+### Generating Secure Session Secret
+Generate a cryptographically secure session secret:
+
+```bash
+# Method 1: Using Node.js
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+
+# Method 2: Using OpenSSL
+openssl rand -hex 64
+
+# Method 3: Using online generator (ensure it's from a trusted source)
+# Visit: https://generate.plus/en/number/random-hex
+```
+
+⚠️ **Security Warning**: Never use the example credentials in production. Generate your own secure values.
 
 ### Deployment Steps
 1. Fork/clone this repository
@@ -53,12 +94,29 @@ The project is configured with:
 Create a `.env` file or set environment variables:
 
 ```bash
+# Core Configuration
 NODE_ENV=production
 PORT=5000
 HOST=0.0.0.0
-POSTGRES_URL=your_postgresql_connection_string
-SESSION_SECRET=your_secure_session_secret_min_32_chars
+
+# Database Configuration (Neon PostgreSQL)
+POSTGRES_URL=postgresql://neondb_owner:npg_qwjCLe54MTdo@ep-ancient-hill-a2bnzhr1-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require
+
+# Security Configuration
+SESSION_SECRET=your_secure_session_secret_minimum_64_characters
+
+# Stack Auth Configuration
+STACK_PROJECT_ID=42e0b860-0408-4849-ab73-95131a5e40bc
+STACK_PUBLISHABLE_CLIENT_KEY=pck_nrtv0jvcmtx2zba49hq54fg5wv0mc0memrrd2edc9re1r
+STACK_SECRET_SERVER_KEY=ssk_fjk86ns9p2yk0d2cmpzzsmhkx22jgx7by6fdamkk07x58
+
+# Production Settings
+PRODUCTION_MODE=true
+DEBUG=false
+LOG_LEVEL=info
 ```
+
+⚠️ **Important**: Replace example credentials with your own secure values before deployment.
 
 ### Deployment Steps
 1. Clone the repository
@@ -120,9 +178,32 @@ Example response:
 ## Security Considerations
 
 ### Environment Variables
-- Always use strong `SESSION_SECRET` (minimum 32 characters)
+- Always use strong `SESSION_SECRET` (minimum 64 characters for production)
 - Never commit sensitive environment variables to git
-- Use `.env.example` as a template
+- Use `.env.example` as a template for setting up your environment
+- Validate all required environment variables before deployment
+- Use different credentials for development, staging, and production environments
+
+#### Environment Variable Security Checklist
+- [ ] Generated secure `SESSION_SECRET` (64+ characters)
+- [ ] Configured Neon database URLs with SSL
+- [ ] Set up Stack Auth credentials
+- [ ] Enabled `PRODUCTION_MODE=true` for production
+- [ ] Set appropriate `LOG_LEVEL` for environment
+- [ ] Configured rate limiting settings
+- [ ] Verified no sensitive data in version control
+
+#### Database URL Format
+```bash
+# Neon PostgreSQL format
+postgresql://username:password@host.region.provider.neon.tech/database?sslmode=require
+
+# Connection pooling (recommended for production)
+POSTGRES_URL=postgresql://neondb_owner:password@ep-xxx-pooler.region.aws.neon.tech/database?sslmode=require
+
+# Direct connection (for migrations)
+DIRECT_URL=postgresql://neondb_owner:password@ep-xxx.region.aws.neon.tech/database?sslmode=require
+```
 
 ### Database Security
 - Use SSL connections for production databases

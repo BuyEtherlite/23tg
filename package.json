@@ -11,6 +11,7 @@
     "check": "tsc",
     "check:env": "node -e \"const z = require('zod'); console.log('Environment validation available')\"",
     "check:deployment": "node deployment-check.cjs",
+    "validate:env": "node validate-env.cjs",
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",

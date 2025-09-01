@@ -5,16 +5,6 @@
       "runtime": "nodejs20.x"
     }
   },
-  "builds": [
-    {
-      "src": "client/**/*",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "api/serverless.ts",
-      "use": "@vercel/node"
-    }
-  ],
   "routes": [
     {
       "src": "/api/(.*)",

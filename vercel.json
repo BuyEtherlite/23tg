@@ -1,1 +1,24 @@
-{"version": 2, "builds": [{"src": "api/**/*.js","use": "@vercel/node"}], "routes": [{"src": "/(.*)", "dest": "/api/$1"}]}
+{
+  "version": 2,
+  "outputDirectory": "dist/public",
+  "builds": [
+    {
+      "src": "api/serverless.ts",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*\\.(js|css|html|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot))",
+      "dest": "/$1"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/serverless.ts"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}

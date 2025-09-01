@@ -1,0 +1,50 @@
+# Development files
+node_modules
+.env.local
+.env.development.local
+.env.test.local
+
+# Build artifacts
+dist/
+build/
+
+# Cache
+.next/
+.cache/
+.parcel-cache/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Runtime
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage/
+
+# TypeScript
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+tmp/
+temp/
+
+# Database
+*.db
+*.sqlite
+
+# Documentation
+README.md
+replit.md
